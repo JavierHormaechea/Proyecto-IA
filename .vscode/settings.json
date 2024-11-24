@@ -1,0 +1,21 @@
+{
+    "C_Cpp.errorSquiggles": "disabled",
+    "files.associations": {
+        "random": "cpp",
+        "queue": "cpp",
+        "cstdlib": "cpp",
+        "deque": "cpp",
+        "initializer_list": "cpp",
+        "stack": "cpp",
+        "type_traits": "cpp",
+        "vector": "cpp",
+        "xstring": "cpp",
+        "xutility": "cpp",
+        "iostream": "cpp",
+        "xlocinfo": "cpp",
+        "ostream": "cpp",
+        "xhash": "cpp",
+        "list": "cpp",
+        "cmath": "cpp"
+    }
+}
