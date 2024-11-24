@@ -1,0 +1,172 @@
+\documentclass[letter, 10pt]{article}
+\usepackage[latin1]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage[dvips]{graphicx}
+\usepackage{url}
+\usepackage[top=3cm,bottom=3cm,left=3.5cm,right=3.5cm,footskip=1.5cm,headheight=1.5cm,headsep=.5cm,textheight=3cm]{geometry}
+
+
+\begin{document}
+\title{Inteligencia Artificial \\ \begin{Large}Algoritmo de 2 pasos con Tabu Seach para el Problema de Generaci\'on de Mazmorras\end{Large}}
+\author{Javier Hormaechea D'Arcangeli}
+\date{\today}
+\maketitle
+
+
+\begin{abstract}
+Este informe aborda el problema de la generaci\'on de mazmorras, un desaf\'io com\'un en el desarrollo de videojuegos ``Roguelike'', los que se caracterizan por ofrecer niveles o mazmorras generados de manera aleatoria. El documento presenta un an\'alisis de distintos enfoques utilizados para la generaci\'on de mazmorras, destacando los algoritmos evolutivos y los enfoques de dos pasos. Se exploran las fortalezas y limitaciones de estos enfoques, subrayando la necesidad de generar estructuras m\'as complejas y desafiantes que puedan ser aplicadas en casos reales. El documento plantea un algoritmo de dos pasos con Tabu Search para generar y optimizar mazmorras, separando la generacion y optimizaci\'on de la estructura y la de las llaves y barreras. Resultados experimentales muestran que el algoritmo tiene un menor tiempo de ejecuci\'on al compararlo con otros metodos, pero para esto sacrifica calidad de la soluci\'on lo que sugiere su uso potencial en generar soluciones iniciales para modelos m\'as refinados.
+
+\end{abstract}
+
+\section{Introducci\'on}
+La industria del videojuego a demostrado un crecimiento exponencial, con unos ingresos esperados de 187,7 mil millones de dolares en 2024 y proyectando unos ingresos de 213,3 mil millones para 2027~\cite{newzooreport}. Dentro de la industria, se han destacado ultimamente los juegos del g\'enero ``Roguelike'' que se caracterizan por permitir al jugador explorar niveles o mazmorras generadas aleatoriamente permitiendo un alto grado de rejugabilidad. Esto a llevado al g\'enero y sus variantes a posicionarse en los puestos 6, 10 y 16 de g\'eneros con m\'as juegos vendidos en 2023~\cite{topsell}. Uno de los desafios que presenta este genero es el de generar mazmorras con estructuras desafiantes para los jugadores, si a esto se le suma que el g\'enero es principalmente utilizado por desarrolladores independientes que no siempre tienen los recursos para desarrollar un sistema de generaci\'on de mazmorras especifico para su titulo, surge la necesidad de algoritmos que permitan generar mazmorras aleatorias dados ciertos parametros iniciales entregados por el desarrollador.
+
+El presente documento busca sentar las bases necesarias para la implementacion de una soluci\'on al problema de generaci\'on de mazmorras. Para esto, se definen las variables y restricciones del problema, luego se presentan las soluciones existentes a la fecha para finalmente plantear un modelo matem\'atico cuyas soluciones correspondan a las soluciones del problema.
+
+\section{Definici\'on del Problema}
+
+El problema de generaci\'on de mazmorras consiste en generar la estructura de una mazmorra asi como los obstaculos que se interpondran en el avance del jugador, para simplificar el problema se considerara la estructura de la mazmorra como un arbol donde el nodo raiz corresponde a la habitaci\'on inicial, esto, a su vez, implica que no existen ciclos, se consideran los siguientes parametros:
+\begin{itemize}
+    \item N\'umero de habitaciones(rooms): corresponden a los nodos del arbol, puden contener llaves y pueden tener entre 0 y 3 hijos, que son las habitaciones a las que estan conectadas.
+    \item N\'umero de barreras(barriers): se ubican en conecciones entre 2 habitaciones y bloquea dicha conecci\'on hasta que se obtiene la llave que la libera
+    \item N\'umero de llaves(keys): se ubican en habitaciones, cada llave tiene una barrera correspondiente que abre.
+    \item Llaves necesarias(needed\_keys): es el n\'umero m\'inimo de llaves que se deben recojer para completar una mazmorra en particular.
+    \item Coeficiente lineal(lcoef): es el promedio de los coeficientes lineales de las habitaciones, los que corresponden al n\'umero de hijos de la habitaci\'on omitiendo a las que no tienen hijos.
+\end{itemize}
+El objetivo de este problema entonces es: dados unos valores de los parametros anteriores entregados por un desarrollador o usuario generar, en el menor tiempo posible, una mazmorra  donde los valores reales de dichos parametros sean los m\'as cercanos posibles a los entregados. 
+Si bien se trabajara esta simplificaci\'on basada en el trabajo de Felipe Dumont~\cite{2stepEA}, existen trabajos m\'as complejos~\cite{dgm} donde se consideran mazmorras continuas con m\'as elementos.
+
+\section{Estado del Arte}
+
+El problema de generaci\'on de mazmorras tiene sus origenes con ``Rogue''~\cite{rogue} el videojuego que da nombre al genero ``Roguelike'', el juego tiene un sistema de generaci\'on simple que crea entre 6 y 10 habitaciones al azar con tama\~nos aleatorios de entre 3x3 y 10x10, luego de esto determina los corredores entre ellas representando la conectividad en un grafo donde,  nuevamente, las habitaciones se conectan a sus vecinas de manera aleatoria~\cite{roguecode}. Pese a la simpleza de estos origenes los trabajos contemporaneos ulizan multiples tecnicas, destacando el uso de algoritmos evolutivos como el caso de Cerny~\cite{CernyEA} que lo utiliza en conjunto con un algoritmo greedy o Ashlock~\cite{AshlockEA} que los emplea para generar estructuras tipo cuevas, otra estrategia a mencionar son los algoritmos en 2 pasos que separa la generaci\'on en 2 para poder optimizar cada parte por separado, destacando el trabajo de Gellet~\cite{Gellethybrid} donde primero genera una descripci\'on del nivel en una gramatica libre de contexto para luego generar el espacio f\'isico y el de Dumont~\cite{2stepEA} que primero genera la estructura de la mazmorra para luego colocar las llaves y las barreras. Caben destacar los trabajos de Pereira~\cite{pgdm} y Dumont~\cite{2stepEA} debido a que estos trabajan con un modelo similar al utilizado en este documento.
+
+
+
+\section{Modelo Matem\'atico}
+
+El modelo matem\'atico a utilizar busca minimizar la siguiente funci\'on~\cite{2stepEA}~\cite{pgdm}:
+$$f = 2( \Delta_{rooms} + \Delta_{keys} + \Delta_{barriers} + \frac{rooms}{10} * \Delta_{lcoef}) + \Delta_{needed\_keys}$$
+\begin{itemize}
+    \item $\Delta$: diferencia entre el valor entregado por el usuario y valor real de la estructura generada.
+\end{itemize}
+
+Para el planteamiento de las restricciones y el espacio de busqueda se definen las siguientes variables binarias: 
+\begin{itemize}
+    \item[\textit{*}]\textit{Como se menciona en la descripci\'on del problema, la estructura de la mazmorra se interpreta como un arbol siendo la habitaci\'on inicial la raiz.}
+    
+    \item $x_{ij}$: es 1 si existe la habitaci\'on i y es hija de la habitaci\'on j, $i \in \{1, 2, \dots, N\}$; $j \in \{0, 1, \dots, N\}$ (j=0 significa que es la raiz, N es el doble de las habitaciones deseadas)
+
+    \item $b_{ijl}$: es 1 si existe una barrera i entre las habitaciones j y l, $i \in \{1, 2, B\}$; $j$, $l \in \{1, 2, \dots, N\}$ (i se utiliza para emparejar con las llaves, B es el doble de las barreras deseadas)
+
+    \item $k_{ij}$: es 1 si existe una llave i en la habitacion j, $i \in \{1, 2, K\}$; $j \in \{1, 2, \dots, N\}$ (i se utiliza para emparejar con las barreras, K es el doble de las llaves deseadas)
+
+    Este modelo esta sujeto a las siguientes restricciones:
+\begin{itemize}
+    \item $\sum_{i=1}^{N} x_{ij} \leq 3$, $\forall j \in \{0, 1, \dots, N\}$, una habitaci\'on no puede tener m\'as de 3 hijos.
+    \item $\sum_{j=1}^{N} k_{ij} = \sum_{j=1}^{N} \sum_{l=1}^{N} b_{ijl} \leq 1$, $\forall i \in \{1, 2, \dots, K\}$ las barreras y llaves solo pueden estar en 1 lugar, cada barrera tiene solo una llave y viceversa (es menor o igual porque la barrera podria no existir).
+    \item $\sum_{j=0}^{N} x_{ij} \leq 1$, $\forall i \in \{1, 2, \dots, N\}$ una habitaci\'on solo tiene 1 padre (es menor o igual porque la habitaci\'on podria no existir).
+    \item $\sum_{i=1}^{N} x_{i0} = 1$, existe solo una habitaci\'on inicial.
+    \item $b_{ijl} \leq x_{jl} + x_{lj}$, $\forall i \in \{1, 2, \dots, B\}$, $\forall j$, $l \in \{1, 2, \dots, N\}$ una barrera solo puede estar en una conexi\'on que existe.
+    \item $\sum_{i=1}^{N} k_{ij} \leq 100000x_{jl}$, $\forall j$, $k \in \{1, 2, \dots, N\}$ solo pueden haber llaves en habitaciones que existen.
+\end{itemize}
+
+Para determinar el espacio de busqueda tienen: $N(N+1)$ variables x, $BN^2$ variables b y $KN$ variables k. Por lo tanto, se tienen $2^{(B+1)N^2 + (K+1)N}$ soluciones posibles.
+
+    
+\end{itemize}
+
+\section{Representaci\'on}
+Para la representaci\'on del problema se decidio trabajar la mazmorra como un arbol donde cada habitaci\'on corresponde a un nodo que puede tener 1 llave y/o 1 barrera. Dentro de la clase mazmorra se almacena, a su vez, 2 listas que corresponden a los nodos que tienen llaves y la los que contienen barrera, luego, la llave que le corresponde a cada barrera es la que tiene su misma posicion en la otra lista.
+\begin{verbatim}
+struct Nodo {
+public:
+    int id;
+    int profundidad;
+    vector<Nodo*> hijos;
+    int id_barrera;
+    int id_llave;
+}
+
+class Dungeon {
+    public:
+    Nodo* raiz;
+    Nodo* fin;
+    vector<Nodo*> recorrido; // por conveniencia es de atras hacia adelante
+    int num_habitaciones;
+    int num_llaves;
+    int llaves_actual;
+    int num_barreras;
+    int barreras_actual;
+    int llaves_necesarias;
+    int llaves_necesarias_actual;
+    int habitaciones_generadas;
+    double coef_lineal;
+    double coef_lineal_actual;
+    int nodos_con_hijos;
+    vector<Nodo*> nodos_barreras;
+    vector<Nodo*> nodos_llaves;
+}
+\end{verbatim}
+
+\section{Descripci\'on del algoritmo}
+El algoritmo que se trabajo consiste en un \textit{2-Step Tabu Search}, este comienza colocando las habitaciones por medio de un greedy, donde para cada nodo, se colocan la cantidad de hijos que le permiten acercarce m\'as al coef\_lineal, luego de esto, las habitaciones se optimizan con tabu search donde el movimiento consiste en agregar una hoja o quitar una hoja al arbol. Despues de esto, se colocan las llaves y barreras con la restriccion de que una llave no puede estar m\'as profunda que su barrera. Finalmente se optimizan las llaves y barreras de la mazmorra por medio de otro tabu search, esta vez siendo el movimiento el mover una barrera a otro nodo permitido.
+
+\section{Experimentos}
+Los experimentos realizados consistieron en ejecutar el algoritmo 100 veces para 8 instancias distintas en una maquina virtual corriendo Ubuntu 22.04.2 LTS con 8 GB de ram DDR4 a 3200 MHZ y un procesador AMD Ryzen 5 5600X, se compararan los resultados con los del algoritmo presentado en \cite{2stepEA} debido a que ambos algoritmos generan y optimizan la estructura de la mazmorra para luego colocar y optimizar las llaves.
+
+\section{Resultados}
+Los resultados presentados a continuacion corresponden al promedio de las 100 ejecuciones de cada instancia.
+\newline
+\begin{center}
+\begin{tabular}{|c|c|c|c|c|c|c|}
+\hline
+ & \multicolumn{2}{|c|}{Habitaciones} & \multicolumn{2}{|c|}{Llaves} & \multicolumn{2}{|c|}{Barreras} \\
+\hline
+Instancia & 2-Step TS & 2-Step EA & 2-Step TS & 2-Step EA & 2-Step TS & 2-Step EA \\
+\hline
+(15, 3, 2, 2.0, 2) & 14.65 & \textbf{15.0} & 1.89 & \textbf{3.0} & \textbf{2.0} & \textbf{2.0} \\
+(20, 4, 4, 1.0, 4) & 19.8 & \textbf{20.0} & 3.95 & \textbf{4.0} & 3.96 & \textbf{4.0}\\
+(20, 4, 4, 2.0, 4) & 20.18 & \textbf{20.0} & 3.64 & \textbf{4.0} & 3.92 & \textbf{4.0} \\
+(25, 8, 8, 1.0, 8) & 27.0 & \textbf{25.0} & \textbf{8.0} & \textbf{8.0} & 8.3 & \textbf{8.0} \\
+(30, 4, 4, 2.0, 4) & 31.10 & \textbf{30.0} & 3.73 & \textbf{4.0} & 4.23 & \textbf{4.0} \\
+(30, 6, 6, 1.5, 6) & 29.64 & \textbf{30.0} & 5.63 & \textbf{6.0} & \textbf{6.0} & \textbf{6.0} \\
+(100, 20, 20, 1.5, 20) & 92.96 & \textbf{99.93} & 10.52 & \textbf{20.0} & 18.44 & \textbf{20.0} \\
+(500 100 100 1.5 100) & 495.0 & \textbf{498.88} & 50.84 & \textbf{100.0} & 99.33 & \textbf{99.99}\\
+\hline
+\end{tabular}
+
+
+\begin{tabular}{|c|c|c|c|c|c|c|}
+\hline
+ & \multicolumn{2}{|c|}{Coeficient lineal} & \multicolumn{2}{|c|}{Funcion objetivo} & \multicolumn{2}{|c|}{Tiempo(s)} \\
+\hline
+Instancia & 2-Step TS & 2-Step EA & 2-Step TS & 2-Step EA & 2-Step TS & 2-Step EA \\
+\hline
+(15, 3, 2, 2.0, 2) & 1.85 & \textbf{1.99} & 5 & \textbf{0.02} & \textbf{0.06} & 3.37 \\
+(20, 4, 4, 1.0, 4) & \textbf{0.99} & \textbf{1.01} & 0.36 & \textbf{0.02} & \textbf{0.09} & 4.41\\
+(20, 4, 4, 2.0, 4) & 1.59 & \textbf{1.89} & 5.57 & \textbf{0.21} & \textbf{0.07} & 3.46  \\
+(25, 8, 8, 1.0, 8) & \textbf{1.0} & 1.04 & 4.16 & \textbf{0.31} & \textbf{0.18} & 4.01 \\
+(30, 4, 4, 2.0, 4) & 1.63 & \textbf{1.91} & 7.44 & \textbf{0.18} & \textbf{0.08} & 3.71 \\
+(30, 6, 6, 1.5, 6) & 1.34 & \textbf{1.52} & 6.05 & \textbf{0.05} & \textbf{0.1} & 3.9 \\
+(100, 20, 20, 1.5, 20) & 1.2 & \textbf{1.48} & 45.86 & \textbf{0.34} & \textbf{0.24} & 5.85 \\
+(500 100 100 1.5 100) & 1.24 & \textbf{1.44} & 240.47 & \textbf{4.6} & \textbf{4.13} & 17.34\\
+\hline
+\end{tabular}
+\end{center}
+
+Se puede ver que 2-Step TS es bastante peor que \cite{2stepEA} en lo que respecta a la calidad de la soluci\'on, sin embargo, con lo que respecta al tiempo de ejecuci\'on se puede ver que e 2-Step TS es entre 40 y 50 veces m\'as r\'apido para instancias peque\~nas, disminullendo la proporci\'on a medida que aumenta el tama\~no de la instancia.
+
+\section{Conclusiones}
+En el presente informe se planteo un algoritmo de 2 pasos con tabu search para generar mazmorras dividiendo el proceso en primero, generar la estructura correspondiente y optimizarla, seguido de la colocaci\'on de llaves y barreras para su posterior optimizaci\'on, permitiendo que se optimizen los distintos parametros por separado. Una novedad dentro de este proceso es la introducci\'on de una funcio\'n  objetivo en la que el peso del coeficiente lineal se ve afectado segu\'n el n\'umero de habitaciones. 
+
+Los resultados obtenidos permiten ver que la calidad de la mazmorra generada no es muy buena, sin embargo, su tiempo de ejecuci\'on sugiere que podria ser una buena herramienta para generar soluciones iniciales para otros algoritmos como \cite{2stepEA}.
+
+
+
+\section{Bibliograf\'ia}
+\bibliographystyle{plain}
+\bibliography{Referencias}
+
+\end{document} 
